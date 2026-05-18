@@ -1,13 +1,15 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { verifyToken } from '@/lib/auth/jwt';
+import { checkRateLimit, getClientIp } from '@/lib/auth/rate-limit';
 
 /**
- * Next.js Middleware — 鉴权拦截
+ * Next.js Middleware — 鉴权拦截 + 限流
  *
  * 规则：
  * - /docs/** 路径需要登录，未登录重定向到 /login
- * - /api/auth/** 路径放行（登录/注册接口）
+ * - /api/auth/login 和 /api/auth/register 限流（每 IP 每分钟 5 次）
+ * - /api/auth/** 其他路径放行（如 /me, /logout）
  * - /api/** 其他路径需要验证 JWT，无效返回 401
  * - 其他路径放行
  */
@@ -19,7 +21,33 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  // 认证相关 API 放行
+  // 认证相关 API — 登录和注册需要限流
+  if (pathname === '/api/auth/login' || pathname === '/api/auth/register') {
+    const ip = getClientIp(request);
+    const { limited, remaining, resetAt } = checkRateLimit(ip, {
+      windowMs: 60_000,   // 1 分钟窗口
+      maxRequests: 5,     // 每分钟最多 5 次
+    });
+
+    if (limited) {
+      return NextResponse.json(
+        { code: 429, data: null, message: '请求过于频繁，请稍后再试' },
+        {
+          status: 429,
+          headers: {
+            'Retry-After': String(Math.ceil((resetAt - Date.now()) / 1000)),
+            'X-RateLimit-Remaining': '0',
+          },
+        }
+      );
+    }
+
+    const response = NextResponse.next();
+    response.headers.set('X-RateLimit-Remaining', String(remaining));
+    return response;
+  }
+
+  // 其他认证 API 放行（/me, /logout）
   if (pathname.startsWith('/api/auth/')) {
     return NextResponse.next();
   }
