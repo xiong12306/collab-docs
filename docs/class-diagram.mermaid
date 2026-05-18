@@ -1,0 +1,66 @@
+classDiagram
+    class User {
+        +string id
+        +string email
+        +string password_hash
+        +string name
+        +string avatar_url
+        +string created_at
+    }
+
+    class Document {
+        +string id
+        +string title
+        +jsonb content
+        +string owner_id
+        +string created_at
+        +string updated_at
+    }
+
+    class DocMember {
+        +string doc_id
+        +string user_id
+        +Role role
+        +string invited_at
+    }
+
+    class DocShare {
+        +string id
+        +string doc_id
+        +string token
+        +Role role
+        +string created_by
+        +string expires_at
+        +boolean used
+        +string created_at
+    }
+
+    class YjsUpdate {
+        +number id
+        +string doc_id
+        +string update
+        +string created_at
+    }
+
+    class Role {
+        <<enumeration>>
+        OWNER
+        EDITOR
+        VIEWER
+    }
+
+    class DocSnapshot {
+        +string id
+        +string doc_id
+        +jsonb content
+        +string created_at
+    }
+
+    User "1" --o "*" Document : owns
+    Document "1" --o "*" DocMember : has
+    User "1" --o "*" DocMember : belongs_to
+    Document "1" --o "*" DocShare : has
+    Document "1" --o "*" YjsUpdate : persists
+    Document "1" --o "*" DocSnapshot : has
+    DocMember --> Role : uses
+    DocShare --> Role : uses

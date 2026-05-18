@@ -1,0 +1,63 @@
+sequenceDiagram
+    participant UA as 用户A (浏览器)
+    participant TA as Tiptap Editor A
+    participant YA as Yjs Doc A
+    participant PA as Supabase Provider A
+    participant SB as Supabase Realtime<br/>(Broadcast Channel)
+    participant DB as Supabase PostgreSQL<br/>(yjs_updates)
+    participant PB as Supabase Provider B
+    participant YB as Yjs Doc B
+    participant TB as Tiptap Editor B
+    participant UB as 用户B (浏览器)
+
+    Note over UA,UB: 阶段一：用户A输入
+
+    UA->>TA: 键入文字 "Hello"
+    TA->>YA: Tiptap Transaction → Yjs 本地更新
+    Note over YA: Yjs CRDT 合并本地更新<br/>生成 incremental update
+
+    YA->>TA: Yjs 更新回调 → Tiptap 重新渲染
+    TA->>UA: UI 即时更新
+
+    Note over UA,UB: 阶段二：实时广播（低延迟路径）
+
+    YA->>PA: yDoc.on('update') 触发
+    PA->>SB: Supabase Broadcast<br/>channel: doc:{doc_id}<br/>event: sync-update<br/>payload: {update: base64, client_id}
+
+    Note over UA,UB: 阶段三：用户B接收
+
+    SB->>PB: Broadcast 消息推送
+    PB->>YB: Y.applyUpdate(yDoc, decodedUpdate)
+    Note over YB: Yjs CRDT 自动合并<br/>冲突自动解决
+
+    YB->>TB: Yjs 更新触发 Tiptap 重新渲染
+    TB->>UB: UI 显示用户A的输入
+
+    Note over UA,UB: 阶段四：Awareness 光标同步
+
+    UA->>TA: 移动光标
+    TA->>YA: Collaboration Cursor 扩展更新 Awareness
+    YA->>PA: awareness.on('update')
+    PA->>SB: Broadcast<br/>event: awareness-update<br/>payload: {states: [{clientId, user, cursor}]}
+
+    SB->>PB: Awareness 消息推送
+    PB->>YB: awareness.setStates(states)
+    YB->>TB: Collaboration Cursor 扩展渲染
+    TB->>UB: 显示用户A的光标（颜色+用户名）
+
+    Note over UA,UB: 阶段五：持久化（后台周期性）
+
+    PA->>DB: POST /api/documents/{id}/sync<br/>定期（每2秒）保存增量更新
+    Note over DB: 存储 yjs_updates<br/>同时更新 documents.content<br/>（Tiptap JSON 副本）
+
+    Note over UA,UB: 阶段六：用户B首次打开文档（冷启动）
+
+    UB->>TB: 打开文档
+    TB->>PB: 初始化 Yjs Doc
+    PB->>DB: GET /api/documents/{id}/sync<br/>获取所有历史 updates
+    DB-->>PB: 返回 [update1, update2, ...]
+    PB->>YB: Y.applyUpdate 逐个应用
+    Note over YB: 从服务端恢复完整 Yjs 文档状态
+    YB->>TB: Tiptap 渲染完整内容
+    PB->>SB: 订阅 Broadcast Channel<br/>doc:{doc_id}
+    TB->>UB: 文档内容渲染完成，进入实时协同
