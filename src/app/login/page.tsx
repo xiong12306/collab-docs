@@ -3,6 +3,7 @@
 /**
  * 登录/注册页面
  * 包含登录和注册两个 Tab
+ * P1 增强：登录表单底部增加忘记密码链接
  */
 import { Suspense, useState } from 'react';
 import { LoginForm } from '@/components/auth/LoginForm';

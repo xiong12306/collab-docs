@@ -3,7 +3,7 @@
 /**
  * 文档卡片组件
  * 显示文档标题、更新时间、成员数量和角色
- * 增强：hover 效果、响应式优化
+ * P1 增强：标题搜索高亮
  */
 import { Card, Tag, Dropdown } from 'antd';
 import type { MenuProps } from 'antd';
@@ -15,18 +15,20 @@ import {
   TeamOutlined,
 } from '@ant-design/icons';
 import { useRouter } from 'next/navigation';
-import { formatDateTime } from '@/lib/utils';
+import { formatDateTime, highlightText } from '@/lib/utils';
 import { ROLE_LABELS, ROLE_COLORS, canManage } from '@/constants/roles';
 import type { DocumentListItem } from '@/types/document';
 import type { Role } from '@/types/collaboration';
 
 interface DocCardProps {
   document: DocumentListItem;
+  /** P1 新增：搜索关键词，用于标题高亮 */
+  searchKeyword?: string;
   onDelete?: (id: string) => void;
   onShare?: (id: string) => void;
 }
 
-export function DocCard({ document, onDelete, onShare }: DocCardProps) {
+export function DocCard({ document, searchKeyword = '', onDelete, onShare }: DocCardProps) {
   const router = useRouter();
 
   /** 点击卡片进入编辑页 */
@@ -50,7 +52,7 @@ export function DocCard({ document, onDelete, onShare }: DocCardProps) {
       {
         key: 'delete',
         icon: <DeleteOutlined />,
-        label: '删除',
+        label: '移入回收站',
         danger: true,
         onClick: () => {
           onDelete?.(document.id);
@@ -71,11 +73,11 @@ export function DocCard({ document, onDelete, onShare }: DocCardProps) {
       >
         <div className="flex items-start justify-between">
           <div className="flex-1 min-w-0">
-            {/* 文档图标和标题 */}
+            {/* 文档图标和标题（P1：搜索高亮） */}
             <div className="flex items-center gap-2 mb-2">
               <FileTextOutlined className="text-blue-500 text-lg flex-shrink-0" />
               <h3 className="text-base font-medium text-gray-900 truncate m-0">
-                {document.title}
+                {highlightText(document.title, searchKeyword)}
               </h3>
             </div>
 

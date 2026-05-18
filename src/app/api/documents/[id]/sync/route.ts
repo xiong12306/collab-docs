@@ -4,6 +4,7 @@
  *
  * Yjs 更新以 base64 编码存储在 yjs_updates 表中。
  * POST 保存更新时同时更新 documents.content 为 Tiptap JSON 快照。
+ * P1 增强：查询加 deleted_at 过滤
  */
 import { NextResponse } from 'next/server';
 import { getServerClient } from '@/lib/supabase/server';
@@ -28,11 +29,12 @@ export async function GET(request: Request, context: RouteContext) {
     const { id } = await context.params;
     const supabase = getServerClient();
 
-    // 检查文档访问权限
+    // P1：检查文档访问权限时过滤已软删除的文档
     const { data: doc } = await supabase
       .from('documents')
       .select('owner_id')
       .eq('id', id)
+      .is('deleted_at', null)
       .single();
 
     if (!doc) {
@@ -114,11 +116,12 @@ export async function POST(request: Request, context: RouteContext) {
 
     const supabase = getServerClient();
 
-    // 检查文档是否存在
+    // P1：检查文档是否存在时过滤已软删除的文档
     const { data: doc } = await supabase
       .from('documents')
       .select('owner_id')
       .eq('id', id)
+      .is('deleted_at', null)
       .single();
 
     if (!doc) {

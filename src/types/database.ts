@@ -38,6 +38,7 @@ export interface Database {
           owner_id: string;
           created_at: string;
           updated_at: string;
+          deleted_at: string | null; // P1 新增：软删除时间
         };
         Insert: {
           id?: string;
@@ -46,11 +47,13 @@ export interface Database {
           owner_id: string;
           created_at?: string;
           updated_at?: string;
+          deleted_at?: string | null;
         };
         Update: {
           title?: string;
           content?: Record<string, unknown>;
           updated_at?: string;
+          deleted_at?: string | null;
         };
       };
       doc_members: {
@@ -124,6 +127,38 @@ export interface Database {
         };
         Update: {};
       };
+      // P1 新增：密码重置 token 表
+      password_reset_tokens: {
+        Row: {
+          id: string;
+          user_id: string;
+          token_hash: string;
+          expires_at: string;
+          used: boolean;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          token_hash: string;
+          expires_at: string;
+          used?: boolean;
+          created_at?: string;
+        };
+        Update: {
+          used?: boolean;
+        };
+      };
     };
   };
+}
+
+/** P1 新增：密码重置 token 行类型（便捷导出） */
+export interface PasswordResetTokenRow {
+  id: string;
+  user_id: string;
+  token_hash: string;
+  expires_at: string;
+  used: boolean;
+  created_at: string;
 }

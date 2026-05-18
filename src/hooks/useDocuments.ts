@@ -3,12 +3,27 @@
 /**
  * 文档 CRUD Hook
  * 提供文档列表查询、创建、删除等操作
- * 增强：创建文档后跳转到编辑页
+ * P1 增强：支持搜索/排序参数，排序持久化到 localStorage
  */
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { fetchApi } from '@/lib/utils';
-import type { DocumentListItem } from '@/types/document';
+import type { DocumentListItem, SortOrder } from '@/types/document';
+
+/** localStorage 排序持久化 key */
+const SORT_STORAGE_KEY = 'collab-docs-sort-order';
+
+/** 获取持久化的排序方式 */
+function getStoredSortOrder(): SortOrder {
+  if (typeof window === 'undefined') return 'updated_desc';
+  return (localStorage.getItem(SORT_STORAGE_KEY) as SortOrder) || 'updated_desc';
+}
+
+/** 保存排序方式到 localStorage */
+function setStoredSortOrder(order: SortOrder): void {
+  if (typeof window === 'undefined') return;
+  localStorage.setItem(SORT_STORAGE_KEY, order);
+}
 
 interface UseDocumentsReturn {
   /** 文档列表 */
@@ -16,24 +31,47 @@ interface UseDocumentsReturn {
   /** 是否正在加载 */
   loading: boolean;
   /** 刷新文档列表 */
-  refresh: () => Promise<void>;
+  refresh: (params?: { search?: string; sort?: SortOrder }) => Promise<void>;
   /** 创建新文档（创建后跳转到编辑页） */
   createDocument: () => Promise<void>;
   /** 删除文档 */
   deleteDocument: (id: string) => Promise<boolean>;
+  /** 当前排序方式 */
+  sortOrder: SortOrder;
+  /** 设置排序方式 */
+  setSortOrder: (order: SortOrder) => void;
+  /** 当前搜索关键词 */
+  searchKeyword: string;
+  /** 设置搜索关键词 */
+  setSearchKeyword: (keyword: string) => void;
 }
 
 export function useDocuments(type: 'owned' | 'shared' = 'owned'): UseDocumentsReturn {
   const [documents, setDocuments] = useState<DocumentListItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [sortOrder, setSortOrderState] = useState<SortOrder>(getStoredSortOrder);
+  const [searchKeyword, setSearchKeyword] = useState('');
   const router = useRouter();
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  /** 设置排序方式并持久化 */
+  const setSortOrder = useCallback((order: SortOrder) => {
+    setSortOrderState(order);
+    setStoredSortOrder(order);
+  }, []);
 
   /** 获取文档列表 */
-  const refresh = useCallback(async () => {
+  const refresh = useCallback(async (params?: { search?: string; sort?: SortOrder }) => {
     setLoading(true);
     try {
+      const search = params?.search ?? searchKeyword;
+      const sort = params?.sort ?? sortOrder;
+      const queryParams = new URLSearchParams({ type });
+      if (search.trim()) queryParams.set('search', search.trim());
+      queryParams.set('sort', sort);
+
       const res = await fetchApi<DocumentListItem[]>(
-        `/api/documents?type=${type}`
+        `/api/documents?${queryParams.toString()}`
       );
       if (res.code === 200 && res.data) {
         setDocuments(res.data);
@@ -45,7 +83,7 @@ export function useDocuments(type: 'owned' | 'shared' = 'owned'): UseDocumentsRe
     } finally {
       setLoading(false);
     }
-  }, [type]);
+  }, [type, searchKeyword, sortOrder]);
 
   /** 创建新文档 — 创建后立即跳转到编辑页 */
   const createDocument = useCallback(async () => {
@@ -76,9 +114,41 @@ export function useDocuments(type: 'owned' | 'shared' = 'owned'): UseDocumentsRe
     [refresh]
   );
 
+  // 搜索关键词变化时防抖 300ms 后重新查询
+  useEffect(() => {
+    if (debounceRef.current) {
+      clearTimeout(debounceRef.current);
+    }
+    debounceRef.current = setTimeout(() => {
+      refresh({ search: searchKeyword, sort: sortOrder });
+    }, 300);
+
+    return () => {
+      if (debounceRef.current) {
+        clearTimeout(debounceRef.current);
+      }
+    };
+  }, [searchKeyword]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // 排序方式变化时立即重新查询
+  useEffect(() => {
+    refresh({ search: searchKeyword, sort: sortOrder });
+  }, [sortOrder]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // 首次加载
   useEffect(() => {
     refresh();
-  }, [refresh]);
+  }, [type]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  return { documents, loading, refresh, createDocument, deleteDocument };
+  return {
+    documents,
+    loading,
+    refresh,
+    createDocument,
+    deleteDocument,
+    sortOrder,
+    setSortOrder,
+    searchKeyword,
+    setSearchKeyword,
+  };
 }

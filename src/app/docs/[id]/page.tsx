@@ -3,13 +3,14 @@
 /**
  * 文档编辑页面
  * 核心：Tiptap 编辑器 + 多人实时协同
- * 增强：骨架屏、404/403、断线重连、viewer 只读模式
+ * 增强：LoadingSkeleton、404/403、断线重连、viewer 只读模式
+ * P1 增强：删除改为移入回收站提示，LoadingSkeleton 替换自定义骨架
  */
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import {
-  Breadcrumb, Input, Button, Tag, Spin, message, Tooltip, Popconfirm,
-  Alert, Result, Skeleton,
+  Breadcrumb, Input, Button, Tag, message, Tooltip, Popconfirm,
+  Alert, Result,
 } from 'antd';
 import {
   HomeOutlined,
@@ -31,6 +32,7 @@ import { Awareness } from 'y-protocols/awareness';
 import { AuthGuard } from '@/components/auth/AuthGuard';
 import { DocToolbar } from '@/components/docs/DocToolbar';
 import { ShareModal } from '@/components/docs/ShareModal';
+import { LoadingSkeleton } from '@/components/common/LoadingSkeleton';
 import { SupabaseYjsProvider } from '@/lib/collaboration/provider';
 import { getAwarenessColor, getUniqueOnlineUsers } from '@/lib/collaboration/awareness';
 import { createBrowserClient } from '@/lib/supabase/client';
@@ -300,7 +302,7 @@ function DocEditContent() {
   }, [docId, title]);
 
   /**
-   * 删除文档
+   * 删除文档（P1：改为移入回收站）
    */
   const handleDelete = useCallback(async () => {
     if (!docId) return;
@@ -310,41 +312,16 @@ function DocEditContent() {
     });
 
     if (res.code === 200) {
-      message.success('文档已删除');
+      message.success('文档已移入回收站');
       router.push('/docs');
     } else {
       message.error(res.message || '删除失败');
     }
   }, [docId, router]);
 
-  // ===== 加载中 — 骨架屏 =====
+  // ===== 加载中 — Loading Skeleton =====
   if (loading) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex flex-col">
-        {/* 顶栏骨架 */}
-        <div className="bg-white border-b border-gray-200 h-14 flex items-center px-4">
-          <div className="skeleton-line" style={{ width: 120, height: 20 }} />
-        </div>
-        {/* 工具栏骨架 */}
-        <div className="bg-white border-b border-gray-200 h-10 flex items-center px-3 gap-2">
-          {[1, 2, 3, 4, 5, 6].map((i) => (
-            <div key={i} className="skeleton-line" style={{ width: 28, height: 28, marginBottom: 0 }} />
-          ))}
-        </div>
-        {/* 编辑区骨架 */}
-        <div className="flex-1 max-w-4xl mx-auto w-full px-8 py-6">
-          <div className="bg-white p-6 rounded-lg border border-gray-200">
-            <div className="skeleton-line skeleton-heading" />
-            <div className="skeleton-line" style={{ width: '90%' }} />
-            <div className="skeleton-line" style={{ width: '75%' }} />
-            <div className="skeleton-line" style={{ width: '85%' }} />
-            <div className="skeleton-line" style={{ width: '60%' }} />
-            <div className="skeleton-line" style={{ width: '95%' }} />
-            <div className="skeleton-line" style={{ width: '45%' }} />
-          </div>
-        </div>
-      </div>
-    );
+    return <LoadingSkeleton type="editor" />;
   }
 
   // ===== 404 页面 =====
@@ -527,10 +504,10 @@ function DocEditContent() {
             {/* 删除按钮（仅 owner） */}
             {canManage(doc.my_role) && (
               <Popconfirm
-                title="确认删除此文档？"
-                description="删除后不可恢复"
+                title="移入回收站？"
+                description="文档将移入回收站，30 天后自动删除"
                 onConfirm={handleDelete}
-                okText="删除"
+                okText="移入回收站"
                 cancelText="取消"
                 okButtonProps={{ danger: true }}
               >

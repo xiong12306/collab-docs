@@ -1,63 +1,73 @@
 sequenceDiagram
-    participant UA as 用户A (浏览器)
-    participant TA as Tiptap Editor A
-    participant YA as Yjs Doc A
-    participant PA as Supabase Provider A
-    participant SB as Supabase Realtime<br/>(Broadcast Channel)
-    participant DB as Supabase PostgreSQL<br/>(yjs_updates)
-    participant PB as Supabase Provider B
-    participant YB as Yjs Doc B
-    participant TB as Tiptap Editor B
-    participant UB as 用户B (浏览器)
+    participant U as 用户
+    participant DP as 文档列表页
+    participant HD as useDocuments Hook
+    participant API as GET /api/documents
+    participant SB as Supabase PostgreSQL
 
-    Note over UA,UB: 阶段一：用户A输入
+    Note over U,SB: 场景1: 文档搜索 + 排序
 
-    UA->>TA: 键入文字 "Hello"
-    TA->>YA: Tiptap Transaction → Yjs 本地更新
-    Note over YA: Yjs CRDT 合并本地更新<br/>生成 incremental update
+    U->>DP: 输入搜索关键词 "需求"
+    DP->>HD: 防抖300ms后调用 refresh({search:"需求", sort:"updated_desc"})
+    HD->>API: fetchApi(`/api/documents?type=owned&search=需求&sort=updated_desc`)
+    API->>SB: SELECT ... FROM documents WHERE owner_id=? AND deleted_at IS NULL AND title ILIKE '%需求%' ORDER BY updated_at DESC
+    SB-->>API: 返回匹配文档列表
+    API-->>HD: {code:200, data:[...], message:"ok"}
+    HD-->>DP: 更新 documents state
+    DP->>DP: DocCard 中 highlightText("需求文档A", "需求") 渲染高亮
+    DP-->>U: 显示搜索结果，关键词高亮
 
-    YA->>TA: Yjs 更新回调 → Tiptap 重新渲染
-    TA->>UA: UI 即时更新
+    Note over U,SB: 场景2: 软删除 → 回收站
 
-    Note over UA,UB: 阶段二：实时广播（低延迟路径）
+    U->>DP: 点击删除按钮
+    DP->>DP: Modal.confirm("文档将移入回收站，30天后自动删除")
+    U->>DP: 确认删除
+    DP->>API: DELETE /api/documents/{id}
+    API->>SB: UPDATE documents SET deleted_at=now() WHERE id=?
+    SB-->>API: 更新成功
+    API-->>DP: {code:200, message:"文档已移入回收站"}
+    DP-->>U: 列表移除该文档
 
-    YA->>PA: yDoc.on('update') 触发
-    PA->>SB: Supabase Broadcast<br/>channel: doc:{doc_id}<br/>event: sync-update<br/>payload: {update: base64, client_id}
+    Note over U,SB: 场景3: 回收站恢复
 
-    Note over UA,UB: 阶段三：用户B接收
+    U->>DP: 进入回收站 /trash
+    DP->>API: GET /api/trash
+    API->>SB: SELECT ... FROM documents WHERE owner_id=? AND deleted_at IS NOT NULL
+    SB-->>API: 返回已删除文档列表
+    API-->>DP: 显示回收站列表
+    U->>DP: 点击恢复
+    DP->>API: PATCH /api/trash/{id}
+    API->>SB: UPDATE documents SET deleted_at=NULL WHERE id=?
+    SB-->>API: 恢复成功
+    API-->>DP: {code:200, message:"文档已恢复"}
+    DP-->>U: 文档从回收站消失，回到文档列表
 
-    SB->>PB: Broadcast 消息推送
-    PB->>YB: Y.applyUpdate(yDoc, decodedUpdate)
-    Note over YB: Yjs CRDT 自动合并<br/>冲突自动解决
+    Note over U,SB: 场景4: 密码重置(MVP)
 
-    YB->>TB: Yjs 更新触发 Tiptap 重新渲染
-    TB->>UB: UI 显示用户A的输入
+    U->>U: 点击"忘记密码?"
+    U->>API: POST /api/auth/forgot-password {email}
+    API->>SB: SELECT id FROM users WHERE email=?
+    SB-->>API: 用户存在
+    API->>API: 生成 rawToken = crypto.randomBytes(32).hex
+    API->>API: token_hash = SHA256(rawToken)
+    API->>SB: INSERT password_reset_tokens(user_id, token_hash, expires_at=now()+1h)
+    API-->>U: {code:200, data:{token:"rawToken"}}
+    U->>U: 跳转 /reset-password?token=rawToken
+    U->>API: POST /api/auth/reset-password {token, new_password}
+    API->>API: SHA256(token) → token_hash
+    API->>SB: SELECT * FROM password_reset_tokens WHERE token_hash=? AND used=false AND expires_at>now()
+    SB-->>API: token有效
+    API->>API: bcryptjs.hash(new_password) → password_hash
+    API->>SB: UPDATE users SET password_hash=? WHERE id=?
+    API->>SB: UPDATE password_reset_tokens SET used=true WHERE id=?
+    API-->>U: {code:200, message:"密码重置成功"}
+    U->>U: 跳转 /login
 
-    Note over UA,UB: 阶段四：Awareness 光标同步
+    Note over U,SB: 场景5: Vercel Cron 自动清理
 
-    UA->>TA: 移动光标
-    TA->>YA: Collaboration Cursor 扩展更新 Awareness
-    YA->>PA: awareness.on('update')
-    PA->>SB: Broadcast<br/>event: awareness-update<br/>payload: {states: [{clientId, user, cursor}]}
-
-    SB->>PB: Awareness 消息推送
-    PB->>YB: awareness.setStates(states)
-    YB->>TB: Collaboration Cursor 扩展渲染
-    TB->>UB: 显示用户A的光标（颜色+用户名）
-
-    Note over UA,UB: 阶段五：持久化（后台周期性）
-
-    PA->>DB: POST /api/documents/{id}/sync<br/>定期（每2秒）保存增量更新
-    Note over DB: 存储 yjs_updates<br/>同时更新 documents.content<br/>（Tiptap JSON 副本）
-
-    Note over UA,UB: 阶段六：用户B首次打开文档（冷启动）
-
-    UB->>TB: 打开文档
-    TB->>PB: 初始化 Yjs Doc
-    PB->>DB: GET /api/documents/{id}/sync<br/>获取所有历史 updates
-    DB-->>PB: 返回 [update1, update2, ...]
-    PB->>YB: Y.applyUpdate 逐个应用
-    Note over YB: 从服务端恢复完整 Yjs 文档状态
-    YB->>TB: Tiptap 渲染完整内容
-    PB->>SB: 订阅 Broadcast Channel<br/>doc:{doc_id}
-    TB->>UB: 文档内容渲染完成，进入实时协同
+    participant CRON as Vercel Cron
+    CRON->>API: GET /api/cron/cleanup-trash (Authorization: Bearer CRON_SECRET)
+    API->>API: 验证 CRON_SECRET
+    API->>SB: DELETE FROM documents WHERE deleted_at < now() - interval '30 days'
+    SB-->>API: 删除N条记录
+    API-->>CRON: {code:200, data:{deleted_count:N}}

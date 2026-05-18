@@ -12,6 +12,7 @@ export interface Document {
   owner_id: string;
   created_at: string;
   updated_at: string;
+  deleted_at: string | null; // P1 新增：软删除时间
 }
 
 /** 文档成员（含关联用户信息） */
@@ -75,6 +76,16 @@ export interface JoinByShareRequest {
   token: string;
 }
 
+/** 排序方式 */
+export type SortOrder = 'updated_desc' | 'updated_asc';
+
+/** 文档列表查询参数（P1 扩展） */
+export interface DocumentListParams {
+  type: 'owned' | 'shared';
+  search?: string;     // 搜索关键词
+  sort?: SortOrder;    // 排序方式
+}
+
 /** 文档列表项（含聚合信息） */
 export interface DocumentListItem {
   id: string;
@@ -83,6 +94,17 @@ export interface DocumentListItem {
   owner_id: string;
   member_count: number;
   role: string;
+  deleted_at?: string | null; // P1 新增：软删除时间
+}
+
+/** 回收站文档列表项 */
+export interface TrashDocListItem {
+  id: string;
+  title: string;
+  updated_at: string;
+  deleted_at: string;
+  owner_id: string;
+  remaining_days: number;
 }
 
 /** 文档详情（含当前用户角色） */

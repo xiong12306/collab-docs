@@ -1,7 +1,8 @@
 /**
  * GET /api/documents/[id] — 获取文档详情
  * PATCH /api/documents/[id] — 更新文档
- * DELETE /api/documents/[id] — 删除文档
+ * DELETE /api/documents/[id] — 删除文档（P1：改为软删除）
+ * P1 增强：所有查询加 deleted_at 过滤，DELETE 改为软删除
  */
 import { NextResponse } from 'next/server';
 import { getServerClient } from '@/lib/supabase/server';
@@ -26,11 +27,12 @@ export async function GET(request: Request, context: RouteContext) {
     const { id } = await context.params;
     const supabase = getServerClient();
 
-    // 查询文档
+    // 查询文档（P1：过滤已软删除的文档）
     const { data: doc, error } = await supabase
       .from('documents')
-      .select('id, title, content, owner_id, created_at, updated_at')
+      .select('id, title, content, owner_id, created_at, updated_at, deleted_at')
       .eq('id', id)
+      .is('deleted_at', null)
       .single();
 
     if (error || !doc) {
@@ -89,11 +91,12 @@ export async function PATCH(request: Request, context: RouteContext) {
     const body = await request.json();
     const supabase = getServerClient();
 
-    // 检查权限：owner 或 editor 可编辑
+    // P1：检查权限时过滤已软删除的文档
     const { data: doc } = await supabase
       .from('documents')
       .select('owner_id')
       .eq('id', id)
+      .is('deleted_at', null)
       .single();
 
     if (!doc) {
@@ -153,7 +156,7 @@ export async function PATCH(request: Request, context: RouteContext) {
   }
 }
 
-/** DELETE 删除文档 */
+/** DELETE 删除文档（P1：改为软删除） */
 export async function DELETE(request: Request, context: RouteContext) {
   try {
     const user = await getCurrentUser();
@@ -167,11 +170,12 @@ export async function DELETE(request: Request, context: RouteContext) {
     const { id } = await context.params;
     const supabase = getServerClient();
 
-    // 检查权限：仅 owner 可删除
+    // P1：检查权限时过滤已软删除的文档
     const { data: doc } = await supabase
       .from('documents')
       .select('owner_id')
       .eq('id', id)
+      .is('deleted_at', null)
       .single();
 
     if (!doc) {
@@ -188,8 +192,11 @@ export async function DELETE(request: Request, context: RouteContext) {
       );
     }
 
-    // 删除文档（级联删除关联数据）
-    const { error } = await supabase.from('documents').delete().eq('id', id);
+    // P1 改造：软删除 — 设置 deleted_at 为当前时间
+    const { error } = await supabase
+      .from('documents')
+      .update({ deleted_at: new Date().toISOString() })
+      .eq('id', id);
 
     if (error) {
       return NextResponse.json(
@@ -199,7 +206,7 @@ export async function DELETE(request: Request, context: RouteContext) {
     }
 
     return NextResponse.json(
-      { code: 200, data: null, message: '删除成功' },
+      { code: 200, data: null, message: '文档已移入回收站' },
       { status: 200 }
     );
   } catch (error) {

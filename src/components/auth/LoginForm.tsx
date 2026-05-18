@@ -2,11 +2,13 @@
 
 /**
  * 登录表单组件
+ * P1 增强：底部增加「忘记密码？」链接
  */
 import { useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Button, Input, Form, message } from 'antd';
 import { MailOutlined, LockOutlined } from '@ant-design/icons';
+import Link from 'next/link';
 import type { AuthUser } from '@/types/auth';
 
 interface LoginFormValues {
@@ -70,6 +72,13 @@ export function LoginForm() {
           登录
         </Button>
       </Form.Item>
+
+      {/* P1 新增：忘记密码链接 */}
+      <div className="text-center">
+        <Link href="/forgot-password" className="text-blue-600 hover:text-blue-800 text-sm">
+          忘记密码？
+        </Link>
+      </div>
     </Form>
   );
 }

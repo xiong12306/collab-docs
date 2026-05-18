@@ -3,12 +3,14 @@
 /**
  * 左侧侧边栏组件
  * 文档编辑页面的侧边栏，显示文档列表导航
+ * P1 增强：增加回收站菜单项
  */
 import { Menu } from 'antd';
 import {
   FileTextOutlined,
   PlusOutlined,
   HomeOutlined,
+  DeleteOutlined,
 } from '@ant-design/icons';
 import { useRouter } from 'next/navigation';
 import type { MenuProps } from 'antd';
@@ -30,6 +32,12 @@ export function Sidebar({ activeDocId, documents = [] }: SidebarProps) {
       icon: <HomeOutlined />,
       label: '文档列表',
       onClick: () => router.push('/docs'),
+    },
+    {
+      key: 'trash',
+      icon: <DeleteOutlined />,
+      label: '回收站',
+      onClick: () => router.push('/trash'),
     },
     {
       type: 'divider',

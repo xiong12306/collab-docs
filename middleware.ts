@@ -7,17 +7,51 @@ import { checkRateLimit, getClientIp } from '@/lib/auth/rate-limit';
  * Next.js Middleware — 鉴权拦截 + 限流
  *
  * 规则：
- * - /docs/** 路径需要登录，未登录重定向到 /login
+ * - /docs/** 和 /trash/** 路径需要登录，未登录重定向到 /login
+ * - /forgot-password 和 /reset-password 页面放行（无需登录）
  * - /api/auth/login 和 /api/auth/register 限流（每 IP 每分钟 5 次）
- * - /api/auth/** 其他路径放行（如 /me, /logout）
+ * - /api/auth/** 其他路径放行（如 /me, /logout, /forgot-password, /reset-password）
+ * - /api/cron/** 需要 CRON_SECRET 验证
  * - /api/** 其他路径需要验证 JWT，无效返回 401
  * - 其他路径放行
  */
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  // 登录/注册页面和静态资源放行
-  if (pathname.startsWith('/login') || pathname.startsWith('/_next') || pathname.startsWith('/favicon')) {
+  // 静态资源放行
+  if (pathname.startsWith('/_next') || pathname.startsWith('/favicon')) {
+    return NextResponse.next();
+  }
+
+  // P1 新增：忘记密码和重置密码页面放行（无需登录）
+  if (pathname.startsWith('/forgot-password') || pathname.startsWith('/reset-password')) {
+    return NextResponse.next();
+  }
+
+  // 登录/注册页面放行
+  if (pathname.startsWith('/login')) {
+    return NextResponse.next();
+  }
+
+  // P1 新增：Cron 路由 CRON_SECRET 验证
+  if (pathname.startsWith('/api/cron/')) {
+    const authHeader = request.headers.get('Authorization');
+    const cronSecret = process.env.CRON_SECRET;
+
+    if (!cronSecret) {
+      return NextResponse.json(
+        { code: 500, data: null, message: 'CRON_SECRET 未配置' },
+        { status: 500 }
+      );
+    }
+
+    if (authHeader !== `Bearer ${cronSecret}`) {
+      return NextResponse.json(
+        { code: 401, data: null, message: '无效的认证凭据' },
+        { status: 401 }
+      );
+    }
+
     return NextResponse.next();
   }
 
@@ -47,7 +81,7 @@ export async function middleware(request: NextRequest) {
     return response;
   }
 
-  // 其他认证 API 放行（/me, /logout）
+  // 其他认证 API 放行（/me, /logout, /forgot-password, /reset-password）
   if (pathname.startsWith('/api/auth/')) {
     return NextResponse.next();
   }

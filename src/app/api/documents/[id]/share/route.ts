@@ -28,11 +28,12 @@ export async function POST(request: Request, context: RouteContext) {
     const body = await request.json();
     const supabase = getServerClient();
 
-    // 检查文档是否存在
+    // 检查文档是否存在（P1：过滤已软删除的文档）
     const { data: doc } = await supabase
       .from('documents')
       .select('owner_id, title')
       .eq('id', id)
+      .is('deleted_at', null)
       .single();
 
     if (!doc) {
@@ -158,6 +159,21 @@ async function handleJoin(
     return NextResponse.json(
       { code: 400, data: null, message: '分享链接与文档不匹配' },
       { status: 400 }
+    );
+  }
+
+  // P1：检查文档是否已被软删除
+  const { data: doc } = await supabase
+    .from('documents')
+    .select('id')
+    .eq('id', docId)
+    .is('deleted_at', null)
+    .single();
+
+  if (!doc) {
+    return NextResponse.json(
+      { code: 410, data: null, message: '文档已被删除' },
+      { status: 410 }
     );
   }
 

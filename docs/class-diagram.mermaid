@@ -1,13 +1,4 @@
 classDiagram
-    class User {
-        +string id
-        +string email
-        +string password_hash
-        +string name
-        +string avatar_url
-        +string created_at
-    }
-
     class Document {
         +string id
         +string title
@@ -15,6 +6,28 @@ classDiagram
         +string owner_id
         +string created_at
         +string updated_at
+        +string deleted_at
+        +isDeleted() boolean
+    }
+
+    class PasswordResetToken {
+        +string id
+        +string user_id
+        +string token_hash
+        +string expires_at
+        +boolean used
+        +string created_at
+        +isExpired() boolean
+        +isValid() boolean
+    }
+
+    class User {
+        +string id
+        +string email
+        +string password_hash
+        +string name
+        +string avatar_url
+        +string created_at
     }
 
     class DocMember {
@@ -42,13 +55,6 @@ classDiagram
         +string created_at
     }
 
-    class Role {
-        <<enumeration>>
-        OWNER
-        EDITOR
-        VIEWER
-    }
-
     class DocSnapshot {
         +string id
         +string doc_id
@@ -56,11 +62,51 @@ classDiagram
         +string created_at
     }
 
+    class Role {
+        <<enumeration>>
+        OWNER
+        EDITOR
+        VIEWER
+    }
+
+    class SortOrder {
+        <<enumeration>>
+        UPDATED_DESC
+        UPDATED_ASC
+    }
+
+    class TrashService {
+        +getTrashDocs(userId: string) Promise~DocumentListItem[]~
+        +restoreDoc(docId: string, userId: string) Promise~boolean~
+        +permanentDelete(docId: string, userId: string) Promise~boolean~
+        +cleanupExpired(days: number) Promise~number~
+    }
+
+    class PasswordResetService {
+        +requestReset(email: string) Promise~ResetRequestResult~
+        +verifyToken(token: string) Promise~TokenVerifyResult~
+        +resetPassword(token: string, newPassword: string) Promise~boolean~
+    }
+
+    class SearchService {
+        +searchDocs(query: string, userId: string, type: string) Promise~DocumentListItem[]~
+        +highlightText(text: string, keyword: string) ReactNode
+    }
+
+    class ErrorInterceptor {
+        +handleNetworkError() void
+        +handleBusinessError(code: number, message: string, retry?: Function) void
+        +fetchApiWithRetry~T~(url: string, options?: RequestInit) Promise~ApiResponse~T~~
+    }
+
     User "1" --o "*" Document : owns
+    User "1" --o "*" PasswordResetToken : has
     Document "1" --o "*" DocMember : has
-    User "1" --o "*" DocMember : belongs_to
     Document "1" --o "*" DocShare : has
     Document "1" --o "*" YjsUpdate : persists
     Document "1" --o "*" DocSnapshot : has
     DocMember --> Role : uses
     DocShare --> Role : uses
+    TrashService --> Document : manages
+    PasswordResetService --> PasswordResetToken : manages
+    SearchService --> Document : searches

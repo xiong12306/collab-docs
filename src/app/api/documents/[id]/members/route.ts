@@ -27,11 +27,12 @@ export async function GET(request: Request, context: RouteContext) {
     const { id } = await context.params;
     const supabase = getServerClient();
 
-    // 检查文档是否存在及用户权限
+    // 检查文档是否存在及用户权限（P1：过滤已软删除的文档）
     const { data: doc } = await supabase
       .from('documents')
       .select('owner_id')
       .eq('id', id)
+      .is('deleted_at', null)
       .single();
 
     if (!doc) {
@@ -162,11 +163,12 @@ export async function POST(request: Request, context: RouteContext) {
 
     const supabase = getServerClient();
 
-    // 检查权限：仅 owner 可邀请
+    // 检查权限：仅 owner 可邀请（P1：过滤已软删除的文档）
     const { data: doc } = await supabase
       .from('documents')
       .select('owner_id')
       .eq('id', id)
+      .is('deleted_at', null)
       .single();
 
     if (!doc || doc.owner_id !== user.id) {
@@ -268,11 +270,12 @@ export async function PATCH(request: Request, context: RouteContext) {
 
     const supabase = getServerClient();
 
-    // 检查权限：仅 owner 可修改
+    // 检查权限：仅 owner 可修改（P1：过滤已软删除的文档）
     const { data: doc } = await supabase
       .from('documents')
       .select('owner_id')
       .eq('id', id)
+      .is('deleted_at', null)
       .single();
 
     if (!doc || doc.owner_id !== user.id) {
@@ -341,11 +344,12 @@ export async function DELETE(request: Request, context: RouteContext) {
 
     const supabase = getServerClient();
 
-    // 检查权限：仅 owner 可移除
+    // 检查权限：仅 owner 可移除（P1：过滤已软删除的文档）
     const { data: doc } = await supabase
       .from('documents')
       .select('owner_id')
       .eq('id', id)
+      .is('deleted_at', null)
       .single();
 
     if (!doc || doc.owner_id !== user.id) {

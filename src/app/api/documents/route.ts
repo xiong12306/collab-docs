@@ -1,11 +1,13 @@
 /**
  * POST /api/documents — 创建文档
- * GET /api/documents?type=owned|shared — 获取文档列表
+ * GET /api/documents?type=owned|shared&search=关键词&sort=updated_desc|updated_asc — 获取文档列表
+ * P1 增强：支持 search 模糊搜索和 sort 排序，所有查询加 deleted_at IS NULL 过滤
  */
 import { NextResponse } from 'next/server';
 import { getServerClient } from '@/lib/supabase/server';
 import { getCurrentUser } from '@/lib/auth/middleware';
 import { getDefaultContent } from '@/lib/utils';
+import type { SortOrder } from '@/types/document';
 
 /** POST 创建文档 */
 export async function POST(request: Request) {
@@ -83,16 +85,35 @@ export async function GET(request: Request) {
 
     const { searchParams } = new URL(request.url);
     const type = searchParams.get('type') || 'owned';
+    const search = searchParams.get('search') || '';
+    const sort = (searchParams.get('sort') || 'updated_desc') as SortOrder;
+
+    // 解析排序方向
+    const ascending = sort === 'updated_asc';
+
+    // P1 新增：转义 ilike 通配符（% 和 _），防止用户输入干扰模式匹配
+    const escapeLikePattern = (str: string): string =>
+      str.replace(/%/g, '\\%').replace(/_/g, '\\_');
 
     const supabase = getServerClient();
 
     if (type === 'owned') {
-      // 获取我的文档（owner）
-      const { data: docs, error } = await supabase
+      // 获取我的文档（owner），排除已软删除的文档
+      let query = supabase
         .from('documents')
         .select('id, title, updated_at, owner_id')
         .eq('owner_id', user.id)
-        .order('updated_at', { ascending: false });
+        .is('deleted_at', null);
+
+      // P1 新增：搜索条件（ilike 模糊匹配，大小写不敏感，转义通配符）
+      if (search.trim()) {
+        query = query.ilike('title', `%${escapeLikePattern(search.trim())}%`);
+      }
+
+      // P1 新增：排序
+      query = query.order('updated_at', { ascending });
+
+      const { data: docs, error } = await query;
 
       if (error) {
         return NextResponse.json(
@@ -149,11 +170,20 @@ export async function GET(request: Request) {
       const sharedDocIds = memberDocs.map((m) => m.doc_id);
       const roleMap = new Map(memberDocs.map((m) => [m.doc_id, m.role]));
 
-      const { data: docs } = await supabase
+      // P1 增强：查询文档时排除已软删除的文档 + 搜索 + 排序
+      let query = supabase
         .from('documents')
         .select('id, title, updated_at, owner_id')
         .in('id', sharedDocIds)
-        .order('updated_at', { ascending: false });
+        .is('deleted_at', null);
+
+      if (search.trim()) {
+        query = query.ilike('title', `%${escapeLikePattern(search.trim())}%`);
+      }
+
+      query = query.order('updated_at', { ascending });
+
+      const { data: docs } = await query;
 
       // 查询成员数量
       let memberCounts: Record<string, number> = {};

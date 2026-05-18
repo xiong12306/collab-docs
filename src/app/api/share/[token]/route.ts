@@ -34,19 +34,28 @@ export async function GET(request: Request, context: RouteContext) {
       ? new Date(share.expires_at) < new Date()
       : false;
 
-    // 查询文档标题
+    // 查询文档标题（P1：过滤已软删除的文档）
     const { data: doc } = await supabase
       .from('documents')
       .select('title')
       .eq('id', share.doc_id)
+      .is('deleted_at', null)
       .single();
+
+    // P1：文档已被软删除
+    if (!doc) {
+      return NextResponse.json(
+        { code: 410, data: null, message: '文档已被删除' },
+        { status: 410 }
+      );
+    }
 
     return NextResponse.json(
       {
         code: 200,
         data: {
           doc_id: share.doc_id,
-          title: doc?.title || '未知文档',
+          title: doc.title,
           role: share.role,
           expires_at: share.expires_at,
           is_expired: isExpired,
