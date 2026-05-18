@@ -80,8 +80,9 @@ export async function POST(request: Request) {
     return response;
   } catch (error) {
     console.error('登录异常:', error);
+    const message = error instanceof Error ? error.message : '服务器内部错误';
     return NextResponse.json(
-      { code: 500, data: null, message: '服务器内部错误' },
+      { code: 500, data: null, message, detail: String(error) },
       { status: 500 }
     );
   }
