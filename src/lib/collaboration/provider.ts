@@ -117,7 +117,7 @@ export class SupabaseYjsProvider {
 
     // 创建 Broadcast Channel（supabase channel 类型定义不完整，需 as any 以支持 broadcast 事件）
     const channel = this.supabase.channel(channelName, {
-      config: { broadcast: { self: false } },
+      config: { broadcast: { self: true } },
     }) as any; // eslint-disable-line @typescript-eslint/no-explicit-any
     this.channel = channel;
 
@@ -144,18 +144,18 @@ export class SupabaseYjsProvider {
       }
     });
 
-    // 设置 Awareness 本地状态
+    // 注册 Yjs update 监听
+    this.ydoc.on('update', this.onUpdateHandler);
+
+    // 注册 Awareness change 监听（必须在 setLocalStateField 之前，否则初始状态不会触发广播）
+    this.awareness.on('change', this.onAwarenessChangeHandler);
+
+    // 设置 Awareness 本地状态（触发 change 事件，需要先注册监听器才能广播出去）
     this.awareness.setLocalStateField('user', {
       id: this.userId,
       name: this.userName,
       color: this.userColor,
     });
-
-    // 注册 Yjs update 监听
-    this.ydoc.on('update', this.onUpdateHandler);
-
-    // 注册 Awareness change 监听
-    this.awareness.on('change', this.onAwarenessChangeHandler);
 
     // 从服务端加载历史更新（冷启动）
     await this.loadFromServer();
@@ -281,6 +281,9 @@ export class SupabaseYjsProvider {
    * 处理远程 Yjs 更新
    */
   private handleRemoteUpdate(payload: { update: string; client_id: number }): void {
+    // 跳过自己的广播（self: true 时会收到自己发出的消息）
+    if (payload.client_id === this.ydoc.clientID) return;
+
     try {
       const update = base64ToUint8Array(payload.update);
       Y.applyUpdate(this.ydoc, update, this);
