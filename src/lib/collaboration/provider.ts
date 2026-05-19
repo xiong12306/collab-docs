@@ -269,13 +269,15 @@ export class SupabaseYjsProvider {
 
     // 广播给其他用户
     if (this.channel) {
-      const encodedUpdate = uint8ArrayToBase64(update);
-      console.log(`[Collab] 📤 LOCAL_UPDATE broadcast — client_id=${this.ydoc.clientID}, updateSize=${update.length} bytes, base64Length=${encodedUpdate.length}`);
+      // 使用 Array.from() 序列化 Uint8Array，避免 Base64 在 Supabase Broadcast Channel
+      // 二进制传输中被损坏导致 atob 解码失败
+      const updateArray = Array.from(update);
+      console.log(`[Collab] 📤 LOCAL_UPDATE broadcast — client_id=${this.ydoc.clientID}, updateSize=${update.length} bytes, arrayLength=${updateArray.length}`);
       this.channel.send({
         type: 'broadcast',
         event: BROADCAST_EVENTS.SYNC_UPDATE,
         payload: {
-          update: encodedUpdate,
+          update: updateArray,
           client_id: this.ydoc.clientID,
         },
       });
@@ -290,7 +292,7 @@ export class SupabaseYjsProvider {
   /**
    * 处理远程 Yjs 更新
    */
-  private handleRemoteUpdate(payload: { update: string; client_id: number }): void {
+  private handleRemoteUpdate(payload: { update: string | number[]; client_id: number }): void {
     // 跳过自己的广播（self: true 时会收到自己发出的消息）
     if (payload.client_id === this.ydoc.clientID) {
       console.log(`[Collab] 🔵 SYNC_UPDATE skipped (self) — client_id=${payload.client_id}`);
@@ -298,11 +300,23 @@ export class SupabaseYjsProvider {
     }
 
     try {
-      const update = base64ToUint8Array(payload.update);
-      console.log(`[Collab] 🔵 SYNC_UPDATE applying — from client_id=${payload.client_id}, updateSize=${update.length} bytes`);
+      // 兼容两种格式：number[]（新格式）和 string（旧 Base64 格式）
+      let update: Uint8Array;
+      if (Array.isArray(payload.update)) {
+        update = new Uint8Array(payload.update);
+      } else if (typeof payload.update === 'string') {
+        // 旧 Base64 格式（向后兼容）
+        update = base64ToUint8Array(payload.update);
+      } else {
+        console.error(`[Collab] ❌ SYNC_UPDATE — unknown update type: ${typeof payload.update}`, payload.update);
+        return;
+      }
+      console.log(`[Collab] 🔵 SYNC_UPDATE applying — from client_id=${payload.client_id}, updateSize=${update.length} bytes, format=${Array.isArray(payload.update) ? 'array' : 'base64'}`);
       Y.applyUpdate(this.ydoc, update, this);
     } catch (error) {
       console.error('[Collab] ❌ 应用远程更新失败:', error);
+      // 诊断日志：打印 payload.update 的类型和前 100 个字符
+      console.error(`[Collab] ❌ payload.update type=${typeof payload.update}, preview=`, JSON.stringify(payload.update)?.substring(0, 200));
     }
   }
 
