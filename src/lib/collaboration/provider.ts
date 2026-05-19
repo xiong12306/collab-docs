@@ -123,14 +123,19 @@ export class SupabaseYjsProvider {
     this.channel = channel;
 
     // 监听 sync-update 事件
-    channel.on('broadcast', { event: BROADCAST_EVENTS.SYNC_UPDATE }, (payload: { update: string; client_id: number }) => {
-      console.log(`[Collab] 🔵 SYNC_UPDATE received — client_id=${payload.client_id}, my clientID=${this.ydoc.clientID}, updateLength=${payload.update?.length}, isSelf=${payload.client_id === this.ydoc.clientID}`);
+    // 注意：Supabase Broadcast Channel 回调收到的是完整信封 { type, event, payload }
+    // 内层 payload 才是我们发送的数据 { update, client_id }
+    channel.on('broadcast', { event: BROADCAST_EVENTS.SYNC_UPDATE }, (envelope: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any
+      // 兼容两种格式：信封格式 { payload: {...} } 和直接格式 {...}
+      const payload = envelope.payload ?? envelope;
+      console.log(`[Collab] 🔵 SYNC_UPDATE received — envelope keys=${Object.keys(envelope).join(',')}, client_id=${payload.client_id}, my clientID=${this.ydoc.clientID}, updateLength=${payload.update?.length}, isSelf=${payload.client_id === this.ydoc.clientID}`);
       this.handleRemoteUpdate(payload);
     });
 
     // 监听 awareness-update 事件
-    channel.on('broadcast', { event: BROADCAST_EVENTS.AWARENESS_UPDATE }, (payload: { states: Array<{ clientId: number; user: { id: string; name: string; color: string } }> }) => {
-      console.log(`[Collab] 🟢 AWARENESS_UPDATE received — states:`, payload.states?.map(s => ({ clientId: s.clientId, userId: s.user?.id, name: s.user?.name })), `my clientID=${this.awareness.clientID}`);
+    channel.on('broadcast', { event: BROADCAST_EVENTS.AWARENESS_UPDATE }, (envelope: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any
+      const payload = envelope.payload ?? envelope;
+      console.log(`[Collab] 🟢 AWARENESS_UPDATE received — envelope keys=${Object.keys(envelope).join(',')}, states:`, payload.states?.map((s: any) => ({ clientId: s.clientId, userId: s.user?.id, name: s.user?.name })), `my clientID=${this.awareness.clientID}`); // eslint-disable-line @typescript-eslint/no-explicit-any
       this.handleRemoteAwareness(payload);
     });
 
