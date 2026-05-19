@@ -104,26 +104,32 @@ export default function LoginPage() {
           </div>
 
           {/* Tab 切换 */}
-          <div className="flex bg-gray-100 rounded-xl p-1 mb-8">
+          <div className="flex gap-8 mb-8 border-b border-gray-200">
             <button
-              className={`flex-1 py-2.5 text-sm font-medium rounded-lg transition-all duration-200 ${
+              className={`relative pb-3 text-[15px] font-medium transition-colors duration-200 ${
                 activeTab === 'login'
-                  ? 'bg-white text-gray-900 shadow-sm'
-                  : 'text-gray-500 hover:text-gray-700'
+                  ? 'text-gray-900'
+                  : 'text-gray-400 hover:text-gray-600'
               }`}
               onClick={() => setActiveTab('login')}
             >
               登录
+              {activeTab === 'login' && (
+                <span className="absolute bottom-0 left-0 right-0 h-[2px] bg-gradient-to-r from-blue-500 to-indigo-500 rounded-full" />
+              )}
             </button>
             <button
-              className={`flex-1 py-2.5 text-sm font-medium rounded-lg transition-all duration-200 ${
+              className={`relative pb-3 text-[15px] font-medium transition-colors duration-200 ${
                 activeTab === 'register'
-                  ? 'bg-white text-gray-900 shadow-sm'
-                  : 'text-gray-500 hover:text-gray-700'
+                  ? 'text-gray-900'
+                  : 'text-gray-400 hover:text-gray-600'
               }`}
               onClick={() => setActiveTab('register')}
             >
               注册
+              {activeTab === 'register' && (
+                <span className="absolute bottom-0 left-0 right-0 h-[2px] bg-gradient-to-r from-blue-500 to-indigo-500 rounded-full" />
+              )}
             </button>
           </div>
 
