@@ -104,33 +104,31 @@ export default function LoginPage() {
           </div>
 
           {/* Tab 切换 */}
-          <div className="flex gap-8 mb-8 border-b border-gray-200">
-            <button
-              className={`relative pb-3 text-[15px] font-medium transition-colors duration-200 ${
-                activeTab === 'login'
-                  ? 'text-gray-900'
-                  : 'text-gray-400 hover:text-gray-600'
-              }`}
-              onClick={() => setActiveTab('login')}
-            >
-              登录
-              {activeTab === 'login' && (
-                <span className="absolute bottom-0 left-0 right-0 h-[2px] bg-gradient-to-r from-blue-500 to-indigo-500 rounded-full" />
-              )}
-            </button>
-            <button
-              className={`relative pb-3 text-[15px] font-medium transition-colors duration-200 ${
-                activeTab === 'register'
-                  ? 'text-gray-900'
-                  : 'text-gray-400 hover:text-gray-600'
-              }`}
-              onClick={() => setActiveTab('register')}
-            >
-              注册
-              {activeTab === 'register' && (
-                <span className="absolute bottom-0 left-0 right-0 h-[2px] bg-gradient-to-r from-blue-500 to-indigo-500 rounded-full" />
-              )}
-            </button>
+          <div className="relative mb-8">
+            <div className="relative inline-flex bg-gray-100/80 backdrop-blur-sm rounded-2xl p-[3px] shadow-inner">
+              {/* 滑动指示器 */}
+              <div
+                className={`absolute top-[3px] bottom-[3px] w-[calc(50%-1.5px)] rounded-xl bg-gradient-to-r from-blue-500 via-blue-500 to-indigo-600 shadow-lg shadow-blue-500/25 transition-all duration-300 ease-out ${
+                  activeTab === 'login' ? 'left-[3px]' : 'left-[calc(50%+0px)]'
+                }`}
+              />
+              <button
+                className={`relative z-10 w-28 py-2.5 text-sm font-semibold rounded-xl transition-colors duration-300 ${
+                  activeTab === 'login' ? 'text-white' : 'text-gray-500 hover:text-gray-700'
+                }`}
+                onClick={() => setActiveTab('login')}
+              >
+                登录
+              </button>
+              <button
+                className={`relative z-10 w-28 py-2.5 text-sm font-semibold rounded-xl transition-colors duration-300 ${
+                  activeTab === 'register' ? 'text-white' : 'text-gray-500 hover:text-gray-700'
+                }`}
+                onClick={() => setActiveTab('register')}
+              >
+                注册
+              </button>
+            </div>
           </div>
 
           {/* 表单区域 */}
