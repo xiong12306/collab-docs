@@ -51,7 +51,7 @@ export function ResetPasswordForm() {
           className="mb-4"
         />
         <div className="text-center">
-          <Link href="/forgot-password" className="text-blue-600 hover:text-blue-800 text-sm">
+          <Link href="/forgot-password" className="text-sm text-gray-400 hover:text-blue-500 transition-colors">
             重新申请
           </Link>
         </div>
@@ -80,7 +80,11 @@ export function ResetPasswordForm() {
             { min: 6, message: '密码长度不能少于 6 位' },
           ]}
         >
-          <Input.Password prefix={<LockOutlined />} placeholder="新密码（至少 6 位）" />
+          <Input.Password
+            prefix={<LockOutlined className="text-gray-400" />}
+            placeholder="新密码（至少 6 位）"
+            style={{ borderRadius: '12px', padding: '10px 14px' }}
+          />
         </Form.Item>
 
         <Form.Item
@@ -98,20 +102,31 @@ export function ResetPasswordForm() {
             }),
           ]}
         >
-          <Input.Password prefix={<LockOutlined />} placeholder="确认新密码" />
+          <Input.Password
+            prefix={<LockOutlined className="text-gray-400" />}
+            placeholder="确认新密码"
+            style={{ borderRadius: '12px', padding: '10px 14px' }}
+          />
         </Form.Item>
 
         <Form.Item>
-          <Button type="primary" htmlType="submit" loading={resetLoading} block>
+          <Button
+            type="primary"
+            htmlType="submit"
+            loading={resetLoading}
+            block
+            style={{
+              borderRadius: '12px',
+              height: '48px',
+              fontWeight: 600,
+              fontSize: '15px',
+              background: 'linear-gradient(135deg, #3b82f6, #6366f1)',
+              boxShadow: '0 4px 14px rgba(59, 130, 246, 0.35)',
+            }}
+          >
             重置密码
           </Button>
         </Form.Item>
-
-        <div className="text-center">
-          <Link href="/login" className="text-blue-600 hover:text-blue-800 text-sm">
-            返回登录
-          </Link>
-        </div>
       </Form>
     </div>
   );

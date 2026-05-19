@@ -7,7 +7,6 @@
  */
 import { Button, Input, Form, message } from 'antd';
 import { MailOutlined } from '@ant-design/icons';
-import Link from 'next/link';
 import { usePasswordReset } from '@/hooks/usePasswordReset';
 
 interface ForgotPasswordFormValues {
@@ -35,20 +34,31 @@ export function ForgotPasswordForm() {
           { type: 'email', message: '邮箱格式不正确' },
         ]}
       >
-        <Input prefix={<MailOutlined />} placeholder="注册时使用的邮箱" />
+        <Input
+          prefix={<MailOutlined className="text-gray-400" />}
+          placeholder="注册时使用的邮箱"
+          style={{ borderRadius: '12px', padding: '10px 14px' }}
+        />
       </Form.Item>
 
       <Form.Item>
-        <Button type="primary" htmlType="submit" loading={forgotLoading} block>
+        <Button
+          type="primary"
+          htmlType="submit"
+          loading={forgotLoading}
+          block
+          style={{
+            borderRadius: '12px',
+            height: '48px',
+            fontWeight: 600,
+            fontSize: '15px',
+            background: 'linear-gradient(135deg, #3b82f6, #6366f1)',
+            boxShadow: '0 4px 14px rgba(59, 130, 246, 0.35)',
+          }}
+        >
           验证邮箱
         </Button>
       </Form.Item>
-
-      <div className="text-center">
-        <Link href="/login" className="text-blue-600 hover:text-blue-800 text-sm">
-          返回登录
-        </Link>
-      </div>
     </Form>
   );
 }

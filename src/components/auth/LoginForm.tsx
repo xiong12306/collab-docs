@@ -9,7 +9,6 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { Button, Input, Form, message } from 'antd';
 import { MailOutlined, LockOutlined } from '@ant-design/icons';
 import Link from 'next/link';
-import type { AuthUser } from '@/types/auth';
 
 interface LoginFormValues {
   email: string;
@@ -57,25 +56,47 @@ export function LoginForm() {
           { type: 'email', message: '邮箱格式不正确' },
         ]}
       >
-        <Input prefix={<MailOutlined />} placeholder="邮箱" />
+        <Input
+          prefix={<MailOutlined className="text-gray-400" />}
+          placeholder="邮箱"
+          className="rounded-xl"
+          style={{ borderRadius: '12px', padding: '10px 14px' }}
+        />
       </Form.Item>
 
       <Form.Item
         name="password"
         rules={[{ required: true, message: '请输入密码' }]}
       >
-        <Input.Password prefix={<LockOutlined />} placeholder="密码" />
+        <Input.Password
+          prefix={<LockOutlined className="text-gray-400" />}
+          placeholder="密码"
+          style={{ borderRadius: '12px', padding: '10px 14px' }}
+        />
       </Form.Item>
 
       <Form.Item>
-        <Button type="primary" htmlType="submit" loading={loading} block>
+        <Button
+          type="primary"
+          htmlType="submit"
+          loading={loading}
+          block
+          style={{
+            borderRadius: '12px',
+            height: '48px',
+            fontWeight: 600,
+            fontSize: '15px',
+            background: 'linear-gradient(135deg, #3b82f6, #6366f1)',
+            boxShadow: '0 4px 14px rgba(59, 130, 246, 0.35)',
+          }}
+        >
           登录
         </Button>
       </Form.Item>
 
       {/* P1 新增：忘记密码链接 */}
       <div className="text-center">
-        <Link href="/forgot-password" className="text-blue-600 hover:text-blue-800 text-sm">
+        <Link href="/forgot-password" className="text-sm text-gray-400 hover:text-blue-500 transition-colors">
           忘记密码？
         </Link>
       </div>
