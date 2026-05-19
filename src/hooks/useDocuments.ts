@@ -4,10 +4,13 @@
  * 文档 CRUD Hook
  * 提供文档列表查询、创建、删除等操作
  * P1 增强：支持搜索/排序参数，排序持久化到 localStorage
+ * 实时更新增强：集成 Supabase Broadcast Channel 接收其他用户的文档变更通知
  */
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { fetchApi } from '@/lib/utils';
+import { useDocumentRealtime, type DocChangeEvent } from './useDocumentRealtime';
+import { useAuth } from './useAuth';
 import type { DocumentListItem, SortOrder } from '@/types/document';
 
 /** localStorage 排序持久化 key */
@@ -54,6 +57,12 @@ export function useDocuments(type: 'owned' | 'shared' = 'owned'): UseDocumentsRe
   const router = useRouter();
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // 实时更新防抖 ref
+  const realtimeDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // 获取当前用户信息，用于广播变更时附带用户 ID
+  const { user } = useAuth();
+
   /** 设置排序方式并持久化 */
   const setSortOrder = useCallback((order: SortOrder) => {
     setSortOrderState(order);
@@ -85,6 +94,17 @@ export function useDocuments(type: 'owned' | 'shared' = 'owned'): UseDocumentsRe
     }
   }, [type, searchKeyword, sortOrder]);
 
+  // 集成实时更新：接收到变更通知时防抖 300ms 后刷新列表
+  const { broadcastChange } = useDocumentRealtime((_payload) => {
+    // 收到变更通知时，使用 300ms 防抖避免频繁刷新
+    if (realtimeDebounceRef.current) {
+      clearTimeout(realtimeDebounceRef.current);
+    }
+    realtimeDebounceRef.current = setTimeout(() => {
+      refresh({ search: searchKeyword, sort: sortOrder });
+    }, 300);
+  });
+
   /** 创建新文档 — 创建后立即跳转到编辑页 */
   const createDocument = useCallback(async () => {
     const res = await fetchApi<{ id: string }>('/api/documents', {
@@ -93,10 +113,12 @@ export function useDocuments(type: 'owned' | 'shared' = 'owned'): UseDocumentsRe
     });
 
     if (res.code === 201 && res.data) {
+      // 广播文档创建通知
+      broadcastChange('created', res.data.id, user?.id || '');
       // 直接跳转到编辑页
       router.push(`/docs/${res.data.id}`);
     }
-  }, [router]);
+  }, [router, broadcastChange, user]);
 
   /** 删除文档 */
   const deleteDocument = useCallback(
@@ -106,12 +128,14 @@ export function useDocuments(type: 'owned' | 'shared' = 'owned'): UseDocumentsRe
       });
 
       if (res.code === 200) {
+        // 广播文档删除通知
+        broadcastChange('deleted', id, user?.id || '');
         await refresh();
         return true;
       }
       return false;
     },
-    [refresh]
+    [refresh, broadcastChange, user]
   );
 
   // 搜索关键词变化时防抖 300ms 后重新查询
@@ -139,6 +163,15 @@ export function useDocuments(type: 'owned' | 'shared' = 'owned'): UseDocumentsRe
   useEffect(() => {
     refresh();
   }, [type]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // 组件卸载时清理实时更新防抖定时器
+  useEffect(() => {
+    return () => {
+      if (realtimeDebounceRef.current) {
+        clearTimeout(realtimeDebounceRef.current);
+      }
+    };
+  }, []);
 
   return {
     documents,

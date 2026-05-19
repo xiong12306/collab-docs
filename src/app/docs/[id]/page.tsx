@@ -40,6 +40,7 @@ import { fetchApi } from '@/lib/utils';
 import { EDITOR_PLACEHOLDER } from '@/constants/editor';
 import { canEdit, canManage, ROLE_LABELS } from '@/constants/roles';
 import { useAuth } from '@/hooks/useAuth';
+import { useDocumentRealtime } from '@/hooks/useDocumentRealtime';
 import type { DocumentDetail } from '@/types/document';
 import type { CollabUser } from '@/types/collaboration';
 
@@ -80,6 +81,7 @@ function DocEditContent() {
   const ydocRef = useRef<Y.Doc | null>(null);
   const awarenessRef = useRef<Awareness | null>(null);
   const lastContentRef = useRef<Record<string, unknown> | null>(null);
+  const fetchDocRef = useRef<() => Promise<void>>(null!);
 
   // 用户颜色
   const userColor = user ? getAwarenessColor(user.id) : '#666666';
@@ -151,8 +153,19 @@ function DocEditContent() {
       }
     };
 
+    // 保存到 ref，供实时更新回调使用
+    fetchDocRef.current = fetchDoc;
+
     fetchDoc();
   }, [docId]);
+
+  // 集成实时更新：其他用户更新文档时刷新文档详情
+  const { broadcastChange } = useDocumentRealtime((payload) => {
+    if (payload.event === 'updated' && payload.docId === docId) {
+      // 其他用户更新了此文档（如标题），刷新文档详情
+      fetchDocRef.current?.();
+    }
+  });
 
   /**
    * 设置编辑器可编辑状态
@@ -296,10 +309,12 @@ function DocEditContent() {
         method: 'PATCH',
         body: JSON.stringify({ title: newTitle }),
       });
+      // 广播标题变更通知，让其他用户刷新
+      broadcastChange('updated', docId, user?.id || '');
     } catch {
       message.error('标题保存失败');
     }
-  }, [docId, title]);
+  }, [docId, title, broadcastChange, user]);
 
   /**
    * 删除文档（P1：改为移入回收站）
@@ -312,12 +327,14 @@ function DocEditContent() {
     });
 
     if (res.code === 200) {
+      // 广播文档删除通知，让文档列表页刷新
+      broadcastChange('deleted', docId, user?.id || '');
       message.success('文档已移入回收站');
       router.push('/docs');
     } else {
       message.error(res.message || '删除失败');
     }
-  }, [docId, router]);
+  }, [docId, router, broadcastChange, user]);
 
   // ===== 加载中 — Loading Skeleton =====
   if (loading) {
