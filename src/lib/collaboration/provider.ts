@@ -114,6 +114,7 @@ export class SupabaseYjsProvider {
     if (this._connected) return;
 
     const channelName = `${CHANNEL_PREFIX}${this.docId}`;
+    console.log(`[Collab] connect() called — docId=${this.docId}, channelName=${channelName}, ydoc.clientID=${this.ydoc.clientID}, userId=${this.userId}`);
 
     // 创建 Broadcast Channel（supabase channel 类型定义不完整，需 as any 以支持 broadcast 事件）
     const channel = this.supabase.channel(channelName, {
@@ -123,16 +124,19 @@ export class SupabaseYjsProvider {
 
     // 监听 sync-update 事件
     channel.on('broadcast', { event: BROADCAST_EVENTS.SYNC_UPDATE }, (payload: { update: string; client_id: number }) => {
+      console.log(`[Collab] 🔵 SYNC_UPDATE received — client_id=${payload.client_id}, my clientID=${this.ydoc.clientID}, updateLength=${payload.update?.length}, isSelf=${payload.client_id === this.ydoc.clientID}`);
       this.handleRemoteUpdate(payload);
     });
 
     // 监听 awareness-update 事件
     channel.on('broadcast', { event: BROADCAST_EVENTS.AWARENESS_UPDATE }, (payload: { states: Array<{ clientId: number; user: { id: string; name: string; color: string } }> }) => {
+      console.log(`[Collab] 🟢 AWARENESS_UPDATE received — states:`, payload.states?.map(s => ({ clientId: s.clientId, userId: s.user?.id, name: s.user?.name })), `my clientID=${this.awareness.clientID}`);
       this.handleRemoteAwareness(payload);
     });
 
     // 监听 Supabase Realtime 连接状态变化
     channel.subscribe(async (status: string) => {
+      console.log(`[Collab] 📡 Channel status changed: ${status} (docId=${this.docId})`);
       if (status === 'SUBSCRIBED') {
         this.setConnected(true);
         this.reconnectAttempts = 0;
@@ -151,11 +155,13 @@ export class SupabaseYjsProvider {
     this.awareness.on('change', this.onAwarenessChangeHandler);
 
     // 设置 Awareness 本地状态（触发 change 事件，需要先注册监听器才能广播出去）
+    console.log(`[Collab] Setting local awareness state — userId=${this.userId}, name=${this.userName}, awareness.clientID=${this.awareness.clientID}`);
     this.awareness.setLocalStateField('user', {
       id: this.userId,
       name: this.userName,
       color: this.userColor,
     });
+    console.log(`[Collab] Local awareness states after set:`, Array.from(this.awareness.getStates().entries()).map(([id, s]) => ({ clientId: id, user: s.user })));
 
     // 从服务端加载历史更新（冷启动）
     await this.loadFromServer();
@@ -166,6 +172,7 @@ export class SupabaseYjsProvider {
     }, SYNC_INTERVAL);
 
     this._connected = true;
+    console.log(`[Collab] connect() completed — connected=true, docId=${this.docId}`);
   }
 
   /**
@@ -263,6 +270,7 @@ export class SupabaseYjsProvider {
     // 广播给其他用户
     if (this.channel) {
       const encodedUpdate = uint8ArrayToBase64(update);
+      console.log(`[Collab] 📤 LOCAL_UPDATE broadcast — client_id=${this.ydoc.clientID}, updateSize=${update.length} bytes, base64Length=${encodedUpdate.length}`);
       this.channel.send({
         type: 'broadcast',
         event: BROADCAST_EVENTS.SYNC_UPDATE,
@@ -271,6 +279,8 @@ export class SupabaseYjsProvider {
           client_id: this.ydoc.clientID,
         },
       });
+    } else {
+      console.warn(`[Collab] ⚠️ LOCAL_UPDATE — channel is null, cannot broadcast!`);
     }
 
     // 缓存待持久化
@@ -282,13 +292,17 @@ export class SupabaseYjsProvider {
    */
   private handleRemoteUpdate(payload: { update: string; client_id: number }): void {
     // 跳过自己的广播（self: true 时会收到自己发出的消息）
-    if (payload.client_id === this.ydoc.clientID) return;
+    if (payload.client_id === this.ydoc.clientID) {
+      console.log(`[Collab] 🔵 SYNC_UPDATE skipped (self) — client_id=${payload.client_id}`);
+      return;
+    }
 
     try {
       const update = base64ToUint8Array(payload.update);
+      console.log(`[Collab] 🔵 SYNC_UPDATE applying — from client_id=${payload.client_id}, updateSize=${update.length} bytes`);
       Y.applyUpdate(this.ydoc, update, this);
     } catch (error) {
-      console.error('应用远程更新失败:', error);
+      console.error('[Collab] ❌ 应用远程更新失败:', error);
     }
   }
 
@@ -306,6 +320,7 @@ export class SupabaseYjsProvider {
       }
     });
 
+    console.log(`[Collab] 📤 AWARENESS broadcast — states:`, states.map(s => ({ clientId: s.clientId, userId: s.user?.id, name: s.user?.name })), `my awareness.clientID=${this.awareness.clientID}`);
     this.channel.send({
       type: 'broadcast',
       event: BROADCAST_EVENTS.AWARENESS_UPDATE,
@@ -319,7 +334,10 @@ export class SupabaseYjsProvider {
    * 使 Tiptap CollaborationCursor 能渲染远程用户光标
    */
   private handleRemoteAwareness(payload: { states: Array<{ clientId: number; user: { id: string; name: string; color: string } }> }): void {
-    if (!payload.states || payload.states.length === 0) return;
+    if (!payload.states || payload.states.length === 0) {
+      console.log(`[Collab] 🟢 AWARENESS_UPDATE skipped — empty states`);
+      return;
+    }
 
     // 暂时移除本地 awareness change 监听，避免将远程状态再次广播出去（回环）
     this.awareness.off('change', this.onAwarenessChangeHandler);
@@ -348,6 +366,8 @@ export class SupabaseYjsProvider {
         }
       }
 
+      console.log(`[Collab] 🟢 AWARENESS applied — added=${addedClients}, updated=${updatedClients}, totalStates=${this.awareness.getStates().size}`);
+
       // 手动触发 update 事件，通知 Tiptap CollaborationCursor 和 y-prosemirror 更新远程光标渲染
       if (addedClients.length > 0 || updatedClients.length > 0) {
         this.awareness.emit('update', [{
@@ -357,7 +377,7 @@ export class SupabaseYjsProvider {
         }, 'remote']);
       }
     } catch (error) {
-      console.error('应用远程 Awareness 更新失败:', error);
+      console.error('[Collab] ❌ 应用远程 Awareness 更新失败:', error);
     } finally {
       // 恢复本地 awareness change 监听
       this.awareness.on('change', this.onAwarenessChangeHandler);
@@ -377,17 +397,20 @@ export class SupabaseYjsProvider {
 
       if (data.code === 200 && data.data?.updates) {
         const updates = data.data.updates as string[];
+        console.log(`[Collab] 📥 Load from server — ${updates.length} historical updates loaded`);
         for (const base64Update of updates) {
           try {
             const update = base64ToUint8Array(base64Update);
             Y.applyUpdate(this.ydoc, update, this);
           } catch (e) {
-            console.warn('应用历史更新失败:', e);
+            console.warn('[Collab] ⚠️ 应用历史更新失败:', e);
           }
         }
+      } else {
+        console.log(`[Collab] 📥 Load from server — no updates found (code=${data.code})`);
       }
     } catch (error) {
-      console.error('加载历史更新失败:', error);
+      console.error('[Collab] ❌ 加载历史更新失败:', error);
     } finally {
       this.loadingHistory = false;
     }
